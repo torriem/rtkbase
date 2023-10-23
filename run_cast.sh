@@ -7,6 +7,18 @@
 BASEDIR=$(dirname "$0")
 source <( grep = ${BASEDIR}/settings.conf )  #import settings
 
+# Check to see if com ports are short /dev/PORTNAME paths,
+# or the longer, descriptive names in /dev/serial/by-id
+if [ ! -e "/dev/${com_port}" ]; then
+	# if it's not in /dev, assume it's in /dev/serial/by-id
+	com_port="serial/by-id/${com_port}"
+fi
+
+if [ ! -e "/dev/${out_com_port}" ]; then
+	# if it's not in /dev, assume it's in /dev/serial/by-id
+	out_com_port="serial/by-id/${out_com_port}"
+fi
+
 receiver_info="RTKBase ${receiver},${version} ${receiver_firmware}"
 in_serial="serial://${com_port}:${com_port_settings}#${receiver_format}"
 in_tcp="tcpcli://localhost:${tcp_port}#${receiver_format}"

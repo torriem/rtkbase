@@ -41,6 +41,7 @@ import signal
 import sys
 import requests
 import tempfile
+from pathlib import Path
 
 from threading import Thread
 from RTKLIB import RTKLIB
@@ -570,6 +571,18 @@ def detect_receiver(json_msg):
         try:
             device_info = next(x for x in answer.stdout.splitlines() if x.startswith('/dev/')).split(' - ')
             port, gnss_type, speed = [x.strip() for x in device_info]
+
+            dev_by_name = Path("/dev/serial/by-id")
+            for n in dev_by_name.iterdir():
+                actual_name = str(Path.joinpath(n.parent, n.readlink()).resolve())
+                sys.stderr.write("%s | %s\n" % (port,actual_name))
+                if port == actual_name:
+                    # found the by-id path, which is more robust to use, but we'll
+                    # pretend it's /dev/long_name, and then run_cast.sh will resolve
+                    # it later.
+                    port = "/dev/%s" % n.parts[-1]
+                    break
+
             result = {"result" : "success", "port" : port, "gnss_type" : gnss_type, "port_speed" : speed}
             result.update(json_msg)
         except Exception:
