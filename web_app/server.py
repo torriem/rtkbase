@@ -66,14 +66,15 @@ from wtforms import PasswordField, BooleanField, SubmitField
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from wtforms.validators import ValidationError, DataRequired, EqualTo
 from flask_socketio import SocketIO, emit, disconnect
+import urllib
 import subprocess
 import psutil
 import distro
 
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
-from werkzeug.urls import url_parse
 from werkzeug.utils import safe_join
+import urllib
 
 app = Flask(__name__)
 app.debug = False
@@ -150,11 +151,12 @@ def manager():
         And it sends various system informations to the web interface
     """
     max_cpu_temp = 0
+    cpu_temp_offset = int(rtkbaseconfig.get("general", "cpu_temp_offset"))
     services_status = getServicesStatus(emit_pingback=False)
     main_service = {}
     while True:
         # Make sure max_cpu_temp is always updated
-        cpu_temp = get_cpu_temp()
+        cpu_temp = get_cpu_temp() + cpu_temp_offset
         max_cpu_temp = max(cpu_temp, max_cpu_temp)
 
         if connected_clients > 0:
@@ -431,7 +433,7 @@ def login_page():
         
         login_user(user, remember=loginform.remember_me.data)
         next_page = request.args.get('next')
-        if not next_page or url_parse(next_page).netloc != '':
+        if not next_page or urllib.parse.urlsplit(next_page).netloc != '':
             next_page = url_for('status_page')
 
         return redirect(next_page)
@@ -675,8 +677,9 @@ def rinex_ign(json_msg):
     mnt_name = rtkbaseconfig.get("ntrip_A", "mnt_name_A").strip("'")
     rinex_type = {"rinex_ign" : "ign", "rinex_nrcan" : "nrcan", "rinex_30s_full" : "30s_full", "rinex_1s_full" : "1s_full"}.get(json_msg.get("rinex-preset"))
     convpath = os.path.abspath(os.path.join(rtkbase_path, "tools", "convbin.sh"))
+    convbin_user = rtkbaseconfig.get("general", "user").strip("'")
     #print("DEBUG", convpath, json_msg.get("name"), rtk.logm.log_path, mnt_name, raw_type, rinex_type)
-    answer = subprocess.run([convpath, json_msg.get("filename"), rtk.logm.log_path, mnt_name, raw_type, rinex_type], encoding="UTF-8", stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    answer = subprocess.run(["sudo", "-u", convbin_user, convpath, json_msg.get("filename"), rtk.logm.log_path, mnt_name, raw_type, rinex_type], encoding="UTF-8", stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     if answer.returncode == 0 and "rinex_file=" in answer.stdout:
         rinex_file = answer.stdout.split("\n").pop().strip("rinex_file=")
         result = {"result" : "success", "file" : rinex_file}

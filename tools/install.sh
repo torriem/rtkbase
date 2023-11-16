@@ -37,8 +37,8 @@ man_help(){
     echo '                         Install all dependencies like git build-essential python3-pip ...'
     echo ''
     echo '        -r | --rtklib'
-    echo '                         Get RTKlib 2.4.3b34g from github and compile it.'
-    echo '                         https://github.com/rtklibexplorer/RTKLIB/tree/b34g'
+    echo '                         Get RTKlib 2.4.3b34h from github and compile it.'
+    echo '                         https://github.com/rtklibexplorer/RTKLIB/tree/b34h'
     echo ''
     echo '        -b | --rtkbase-release'
     echo '                         Get last release of RTKBase:'
@@ -104,7 +104,8 @@ install_dependencies() {
     echo 'INSTALLING DEPENDENCIES'
     echo '################################'
       apt-get "${APT_TIMEOUT}" update || exit 1
-      apt-get "${APT_TIMEOUT}" install -y git build-essential pps-tools python3-pip python3-dev python3-setuptools python3-wheel libsystemd-dev bc dos2unix socat zip unzip pkg-config psmisc || exit 1
+      apt-get "${APT_TIMEOUT}" install -y git build-essential pps-tools python3-pip python3-venv python3-dev python3-setuptools python3-wheel libsystemd-dev bc dos2unix socat zip unzip pkg-config psmisc || exit 1
+      apt-get install -y libxml2-dev libxslt-dev || exit 1 # needed for lxml (for pystemd)
       #apt-get "${APT_TIMEOUT}" upgrade -y
 }
 
@@ -129,7 +130,7 @@ install_gpsd_chrony() {
       sed -i s/^After=.*/After=gpsd.service/ /etc/systemd/system/chrony.service
 
       #If needed, adding backports repository to install a gpsd release that support the F9P
-      if lsb_release -c | grep -qE 'bionic|buster'
+      if lsb_release -sc | grep -qE 'bionic|buster'
       then
         if ! apt-cache policy | grep -qE 'buster-backports.* armhf'
         then
@@ -176,17 +177,17 @@ install_rtklib() {
     #[[ $arch_package == 'x86_64' ]] && arch_package='x86'
     computer_model=$(tr -d '\0' < /sys/firmware/devicetree/base/model)
     # convert "Raspberry Pi 3 Model B plus rev 1.3" or other Raspi model to the variable "Raspberry Pi"
-    [ -z "${computer_model##*'Raspberry Pi'*}" ] && computer_model='Raspberry Pi'
+    [ -n "${computer_model}" ] && [ -z "${computer_model##*'Raspberry Pi'*}" ] && computer_model='Raspberry Pi'
     sbc_array=('Xunlong Orange Pi Zero' 'Raspberry Pi')
     #test if computer_model in sbc_array (https://stackoverflow.com/questions/3685970/check-if-a-bash-array-contains-a-value)
     if printf '%s\0' "${sbc_array[@]}" | grep -Fxqz -- "${computer_model}" \
-        && [[ -f "${rtkbase_path}"'/tools/bin/rtklib_b34g/'"${arch_package}"'/str2str' ]] \
-        && lsb_release -c | grep -qE 'buster|bullseye'
+        && [[ -f "${rtkbase_path}"'/tools/bin/rtklib_b34h/'"${arch_package}"'/str2str' ]] \
+        && lsb_release -c | grep -qE 'buster|bullseye|bookworm'
     then
       echo 'Copying new rtklib binary for ' "${computer_model}" ' - ' "${arch_package}"
-      cp "${rtkbase_path}"'/tools/bin/rtklib_b34g/'"${arch_package}"/str2str /usr/local/bin/
-      cp "${rtkbase_path}"'/tools/bin/rtklib_b34g/'"${arch_package}"/rtkrcv /usr/local/bin/
-      cp "${rtkbase_path}"'/tools/bin/rtklib_b34g/'"${arch_package}"/convbin /usr/local/bin/
+      cp "${rtkbase_path}"'/tools/bin/rtklib_b34h/'"${arch_package}"/str2str /usr/local/bin/
+      cp "${rtkbase_path}"'/tools/bin/rtklib_b34h/'"${arch_package}"/rtkrcv /usr/local/bin/
+      cp "${rtkbase_path}"'/tools/bin/rtklib_b34h/'"${arch_package}"/convbin /usr/local/bin/
     else
       echo 'No binary available for ' "${computer_model}" ' - ' "${arch_package}" '. We will build it from source'
       _compil_rtklib
@@ -197,18 +198,18 @@ _compil_rtklib() {
     echo '################################'
     echo 'COMPILING RTKLIB'
     echo '################################'
-    #Get Rtklib 2.4.3 b34g release
-    sudo -u "${RTKBASE_USER}" wget -qO - https://github.com/rtklibexplorer/RTKLIB/archive/refs/tags/b34g.tar.gz | tar -xvz
+    #Get Rtklib 2.4.3 b34h release
+    sudo -u "${RTKBASE_USER}" wget -qO - https://github.com/rtklibexplorer/RTKLIB/archive/refs/tags/b34h.tar.gz | tar -xvz
     #Install Rtklib app
     #TODO add correct CTARGET in makefile?
-    make --directory=RTKLIB-b34g/app/consapp/str2str/gcc
-    make --directory=RTKLIB-b34g/app/consapp/str2str/gcc install
-    make --directory=RTKLIB-b34g/app/consapp/rtkrcv/gcc
-    make --directory=RTKLIB-b34g/app/consapp/rtkrcv/gcc install
-    make --directory=RTKLIB-b34g/app/consapp/convbin/gcc
-    make --directory=RTKLIB-b34g/app/consapp/convbin/gcc install
+    make --directory=RTKLIB-b34h/app/consapp/str2str/gcc
+    make --directory=RTKLIB-b34h/app/consapp/str2str/gcc install
+    make --directory=RTKLIB-b34h/app/consapp/rtkrcv/gcc
+    make --directory=RTKLIB-b34h/app/consapp/rtkrcv/gcc install
+    make --directory=RTKLIB-b34h/app/consapp/convbin/gcc
+    make --directory=RTKLIB-b34h/app/consapp/convbin/gcc install
     #deleting RTKLIB
-    rm -rf RTKLIB-b34g/
+    rm -rf RTKLIB-b34h/
 }
 
 _rtkbase_repo(){
@@ -218,7 +219,6 @@ _rtkbase_repo(){
     else
       sudo -u "${RTKBASE_USER}" git clone https://github.com/stefal/rtkbase.git
     fi
-    sudo -u "${RTKBASE_USER}" touch rtkbase/settings.conf
     _add_rtkbase_path_to_environment
 
 }
@@ -227,7 +227,6 @@ _rtkbase_release(){
     #Get rtkbase latest release
     sudo -u "${RTKBASE_USER}" wget https://github.com/stefal/rtkbase/releases/latest/download/rtkbase.tar.gz -O rtkbase.tar.gz
     sudo -u "${RTKBASE_USER}" tar -xvf rtkbase.tar.gz
-    sudo -u "${RTKBASE_USER}" touch rtkbase/settings.conf
     _add_rtkbase_path_to_environment
 
 }
@@ -286,7 +285,6 @@ install_rtkbase_custom_source() {
     else
       sudo -u "${RTKBASE_USER}" wget "${1}" -O rtkbase.tar.gz
       sudo -u "${RTKBASE_USER}" tar -xvf rtkbase.tar.gz
-      sudo -u "${RTKBASE_USER}" touch rtkbase/settings.conf
       _add_rtkbase_path_to_environment
     fi
 }
@@ -306,7 +304,6 @@ install_rtkbase_bundled() {
     # Check if there is some content after __ARCHIVE__ marker (more than 100 lines)
     [[ $(sed -n '/__ARCHIVE__/,$p' "${0}" | wc -l) -lt 100 ]] && echo "RTKBASE isn't bundled inside install.sh. Please choose another source" && exit 1  
     sudo -u "${RTKBASE_USER}" tail -n+${ARCHIVE} "${0}" | tar xpJv && \
-    sudo -u "${RTKBASE_USER}" touch rtkbase/settings.conf
     _add_rtkbase_path_to_environment
 }
 
@@ -333,8 +330,9 @@ rtkbase_requirements(){
     echo '################################'
     echo 'INSTALLING RTKBASE REQUIREMENTS'
     echo '################################'
-      #as we need to run the web server as root, we need to install the requirements with
-      #the same user
+      # create virtual environnement for rtkbase
+      sudo -u "${RTKBASE_USER}" python3 -m venv "${rtkbase_path}"/venv
+      python_venv="${rtkbase_path}"/venv/bin/python
       platform=$(uname -m)
       if [[ $platform =~ 'aarch64' ]] || [[ $platform =~ 'x86_64' ]]
         then
@@ -343,19 +341,28 @@ rtkbase_requirements(){
       fi
       # Copying udev rules
       [[ ! -d /etc/udev/rules.d ]] && mkdir /etc/udev/rules.d/
-      cp "${rtkbase_path}"/tools/90-usb-simcom-at.rules /etc/rules.d/
+      cp "${rtkbase_path}"/tools/*.rules /etc/udev/rules.d/
       udevadm control --reload && udevadm trigger
-      
-      python3 -m pip install --upgrade pip setuptools wheel  --extra-index-url https://www.piwheels.org/simple
-      # install prebuilt wheel for cryptography because it is unavailable on piwheels (2023/01)
-      if [[ $platform == 'armv7l' ]] && [[ $(python3 --version) =~ '3.7' ]]
-        then 
-          python3 -m pip install "${rtkbase_path}"/tools/wheel/cryptography-38.0.0-cp37-cp37m-linux_armv7l.whl
-      elif [[ $platform == 'armv6l' ]] && [[ $(python3 --version) =~ '3.7' ]]
-        then
-          python3 -m pip install "${rtkbase_path}"/tools/wheel/cryptography-38.0.0-cp37-cp37m-linux_armv6l.whl
+
+      #Copying settings.conf.default as settings.conf
+      if [[ ! -f "${rtkbase_path}/settings.conf" ]]
+      then
+        cp "${rtkbase_path}/settings.conf.default" "${rtkbase_path}/settings.conf"
       fi
-      python3 -m pip install -r "${rtkbase_path}"/web_app/requirements.txt  --extra-index-url https://www.piwheels.org/simple
+      #Then launch check cpu temp script for OPI zero LTS
+      source "${rtkbase_path}/tools/opi_temp_offset.sh"
+      #venv module installation
+      sudo -u "${RTKBASE_USER}" "${python_venv}" -m pip install --upgrade pip setuptools wheel  --extra-index-url https://www.piwheels.org/simple
+      # install prebuilt wheel for cryptography because it is unavailable on piwheels (2023/01)
+      # not needed anymore (2023/11)
+      #if [[ $platform == 'armv7l' ]] && [[ $("${python_venv}" --version) =~ '3.7' ]]
+      #  then 
+      #    sudo -u "${RTKBASE_USER}" "${python_venv}" -m pip install "${rtkbase_path}"/tools/wheel/cryptography-38.0.0-cp37-cp37m-linux_armv7l.whl
+      #elif [[ $platform == 'armv6l' ]] && [[ $("${python_venv}" --version) =~ '3.7' ]]
+      #  then
+      #    sudo -u "${RTKBASE_USER}" "${python_venv}" -m pip install "${rtkbase_path}"/tools/wheel/cryptography-38.0.0-cp37-cp37m-linux_armv6l.whl
+      #fi
+      sudo -u "${RTKBASE_USER}" "${python_venv}" -m pip install -r "${rtkbase_path}"/web_app/requirements.txt  --extra-index-url https://www.piwheels.org/simple
       #when we will be able to launch the web server without root, we will use
       #sudo -u $(logname) python3 -m pip install -r requirements.txt --user.
 }
@@ -367,7 +374,7 @@ install_unit_files() {
       if [ -d "${rtkbase_path}" ]
       then 
         #Install unit files
-        "${rtkbase_path}"/tools/copy_unit.sh --user "${RTKBASE_USER}"
+        "${rtkbase_path}"/tools/copy_unit.sh --python_path "${rtkbase_path}"/venv/bin/python --user "${RTKBASE_USER}"
         systemctl enable rtkbase_web.service
         systemctl enable rtkbase_archive.timer
         systemctl daemon-reload
@@ -454,11 +461,8 @@ detect_gnss() {
             sudo -u "${RTKBASE_USER}" sed -i s/^com_port_settings=.*/com_port_settings=\'${detected_gnss[2]}:8:n:1\'/ "${rtkbase_path}"/settings.conf
             
           else
-            #create settings.conf with the com_port setting and the settings needed to start str2str_tcp
-            #as it could start before the web server merge settings.conf.default and settings.conf
-            sudo -u "${RTKBASE_USER}" printf "[main]\ncom_port='"${detected_gnss[0]}"'\ncom_port_settings='"${detected_gnss[2]}":8:n:1'\nreceiver=''\nreceiver_format=''\nreceiver_firmware=''\ntcp_port='5015'\n" > "${rtkbase_path}"/settings.conf
-            #add empty *_receiver_options on rtcm/ntrip_a/ntrip_b/serial outputs.
-            sudo -u "${RTKBASE_USER}" printf "[ntrip_A]\nntrip_a_receiver_options=''\n[ntrip_B]\nntrip_b_receiver_options=''\n[local_ntrip_caster]\nlocal_ntripc_receiver_options=''\n[rtcm_svr]\nrtcm_receiver_options=''\n[rtcm_serial]\nrtcm_serial_receiver_options=''\n" >> "${rtkbase_path}"/settings.conf
+            echo 'settings.conf is missing'
+            return 1
           fi
       elif [[ ${#detected_gnss[*]} -ne 3 ]]
         then
@@ -484,7 +488,7 @@ configure_gnss(){
     echo '################################'
       if [ -d "${rtkbase_path}" ]
       then
-        source <( grep = "${rtkbase_path}"/settings.conf ) 
+        source <( grep '=' "${rtkbase_path}"/settings.conf ) 
         systemctl is-active --quiet str2str_tcp.service && sudo systemctl stop str2str_tcp.service
         #if the receiver is a U-Blox, launch the set_zed-f9p.sh. This script will reset the F9P and configure it with the corrects settings for rtkbase
         #!!!!!!!!!  CHECK THIS ON A REAL raspberry/orange Pi !!!!!!!!!!!
@@ -553,15 +557,18 @@ _add_modem_port(){
     sudo -u "${RTKBASE_USER}" sed -i s\!^modem_at_port=.*\!modem_at_port=\'${MODEM_AT_PORT}\'! "${rtkbase_path}"/settings.conf
   elif [[ -f "${rtkbase_path}/settings.conf" ]]  && ! grep -qE "^modem_at_port=.*" "${rtkbase_path}"/settings.conf #check if settings.conf exists without modem_at_port entry
   then
-    sudo -u "${RTKBASE_USER}" printf "[network]\nmodem_at_port='"${MODEM_AT_PORT}"'" >> "${rtkbase_path}"/settings.conf
+    printf "[network]\nmodem_at_port='%s'\n" "${MODEM_AT_PORT}"| sudo tee -a "${rtkbase_path}"/settings.conf > /dev/null
+
   elif [[ ! -f "${rtkbase_path}/settings.conf" ]]
   then
     #create settings.conf with the modem_at_port setting
-    sudo -u "${RTKBASE_USER}" printf "[network]\nmodem_at_port='"${MODEM_AT_PORT}"'" > "${rtkbase_path}"/settings.conf
+    echo 'settings.conf is missing'
+    return 1
   fi
 }
 
 _configure_modem(){
+  sudo -u "${RTKBASE_USER}" "${rtkbase_path}/venv/bin/python" -m pip install nmcli  --extra-index-url https://www.piwheels.org/simple
   python3 "${rtkbase_path}"/tools/modem_config.py --config
   "${rtkbase_path}"/tools/lte_network_mgmt.sh --connection_rename --lte_priority
 }
@@ -699,7 +706,8 @@ main() {
     install_rtklib            && \
     install_unit_files        && \
     install_gpsd_chrony
-    [[ $? != 0 ]] && ((cumulative_exit+=$?))
+    ret=$?
+    [[ $ret != 0 ]] && ((cumulative_exit+=ret))
     detect_gnss               && \
     configure_gnss
     start_services ; ((cumulative_exit+=$?))
